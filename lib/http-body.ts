@@ -1,0 +1,2 @@
+import { invariant } from "@/lib/errors";
+export async function limitedFormData(request:Request,maximum:number){const reader=request.body?.getReader();invariant(reader,"คำขอไม่มีไฟล์");const chunks:Uint8Array[]=[];let size=0;for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size > maximum){await reader.cancel();invariant(false,"ไฟล์ใหญ่เกินกำหนด",413);}chunks.push(value);}return new Response(Buffer.concat(chunks),{headers:{"content-type":request.headers.get("content-type") ?? ""}}).formData();}

@@ -1,0 +1,5 @@
+import Image from "next/image";
+import { listAttachments,type FileEntity } from "@/modules/files/service";
+import type { Actor } from "@/lib/permissions";
+import { UploadForm } from "@/components/forms/upload-form";
+export async function Attachments({actor,entity,id,editable}:{actor:Actor;entity:FileEntity;id:string;editable:boolean}){const files=await listAttachments(actor,entity,id);return <section className="panel mt-6"><h2 className="text-lg font-bold">รูปภาพ / เอกสาร</h2>{files.length ? <div className="mt-4 flex flex-wrap gap-4">{files.map(file=><a key={file.id} href={`/api/files/${file.storageKey}`} target="_blank" rel="noreferrer" className="block max-w-40 text-sm text-blue-700">{file.mimeType.startsWith("image/") && <Image unoptimized src={`/api/files/${file.storageKey}`} width={160} height={120} alt={file.fileName} className="mb-2 h-28 rounded-lg object-cover" />}{file.fileName}</a>)}</div> : <p className="mt-3 text-sm text-slate-500">ยังไม่มีไฟล์แนบ</p>}{editable && <UploadForm entity={entity} id={id} />}</section>;}

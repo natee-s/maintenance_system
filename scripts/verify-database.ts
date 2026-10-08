@@ -1,0 +1,22 @@
+import "dotenv/config";
+import { Client } from "pg";
+import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+const source=new URL(process.env.DATABASE_URL!);
+if(!["localhost","127.0.0.1"].includes(source.hostname) || source.port !== "54329")throw new Error("Fresh verification is restricted to project-local PostgreSQL port 54329");
+const database=`cmms_verify_${Date.now()}`;
+const adminUrl=new URL(source);adminUrl.pathname="/postgres";
+const client=new Client({connectionString:adminUrl.toString()});await client.connect();
+await client.query(`CREATE DATABASE "${database}" WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'`);await client.end();
+source.pathname=`/${database}`;
+const environment:NodeJS.ProcessEnv={...process.env,DATABASE_URL:source.toString(),NODE_ENV:"test"};
+function run(args:string[]){const result=spawnSync(process.execPath,args,{env:environment,stdio:"inherit"});if(result.status !== 0)throw new Error(`Fresh verification failed at ${args[0]}`);}
+run(["node_modules/prisma/build/index.js","migrate","deploy"]);
+run(["node_modules/tsx/dist/cli.mjs","prisma/seed.ts"]);
+run(["node_modules/vitest/vitest.mjs","run","--config","vitest.integration.config.ts"]);
+const verify=new Client({connectionString:source.toString()});await verify.connect();
+const reconcile=await verify.query(`SELECT COUNT(*)::int AS mismatches FROM "StockBalance" b LEFT JOIN LATERAL (SELECT COALESCE(SUM(CASE WHEN type IN ('ISSUE','ADJUST_OUT') THEN -quantity ELSE quantity END),0) AS quantity FROM "StockTransaction" t WHERE t."partId"=b."partId" AND t."warehouseId"=b."warehouseId") l ON true LEFT JOIN LATERAL (SELECT COALESCE(SUM(quantity-"issuedQuantity"),0) AS quantity FROM "PartReservation" r WHERE r."partId"=b."partId" AND r."warehouseId"=b."warehouseId" AND status IN ('ACTIVE','PARTIALLY_ISSUED')) r ON true WHERE b."onHandQty"<>l.quantity OR b."reservedQty"<>r.quantity`);
+if(reconcile.rows[0].mismatches !== 0)throw new Error("Ledger/reservation balance mismatch");
+const counts=await verify.query(`SELECT (SELECT COUNT(*)::int FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL) AS migrations,(SELECT COUNT(*)::int FROM "User") AS users,(SELECT COUNT(*)::int FROM "StockTransaction") AS ledger`);await verify.end();
+writeFileSync("docs/FRESH_DATABASE_VERIFICATION.json",JSON.stringify({checkedAt:new Date().toISOString(),database,...counts.rows[0],balanceMismatches:0,migrationSeedIntegration:"passed"},null,2));
+console.log("Fresh migration, seed, integration and ledger/reservation reconciliation passed; verification database preserved.");

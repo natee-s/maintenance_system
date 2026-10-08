@@ -1,0 +1,6 @@
+import { it,expect } from "vitest";
+import type { PmExecutionItem } from "@/generated/prisma/client";
+import { validateChecklistItem,answered } from "@/modules/pm/checklist-rules";
+const base={sequence:1,titleSnapshot:"Bearing",itemType:"PASS_FAIL",required:true,responseBoolean:null,responseText:null,responseNumber:null,passFailResult:null,note:null,minValue:null,maxValue:null,requiresNoteOnFail:true,requiresPhotoOnFail:true} as PmExecutionItem;
+it("blocks missing required responses and fail evidence",()=>{expect(()=>validateChecklistItem(base,false)).toThrow();const failed={...base,passFailResult:"FAIL" as const};expect(()=>validateChecklistItem(failed,true)).toThrow("บันทึก");expect(()=>validateChecklistItem({...failed,note:"Worn"},false)).toThrow("รูปภาพ");expect(()=>validateChecklistItem({...failed,note:"Worn"},true)).not.toThrow();});
+it("accepts zero readings/false answers and enforces numeric bounds",()=>{const number={...base,itemType:"NUMBER" as const,responseNumber:0,minValue:0,maxValue:10};expect(answered(number)).toBe(true);expect(()=>validateChecklistItem(number,false)).not.toThrow();expect(()=>validateChecklistItem({...number,responseNumber:11},false)).toThrow();expect(answered({...base,itemType:"CHECK",responseBoolean:false})).toBe(true);});

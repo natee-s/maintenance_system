@@ -1,0 +1,9 @@
+import Link from "next/link";
+import { pageActor } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { usageHistory } from "@/modules/inventory/report-service";
+import { PageHeader } from "@/components/ui/page-header";
+import { Filters } from "@/components/forms/filters";
+import { RecordList } from "@/components/tables/record-list";
+import type { Query } from "@/lib/lists";
+export default async function Usage({searchParams}:{searchParams:Promise<Query>}){const query=await searchParams,data=await usageHistory(await pageActor(),query),[parts,assets]=await Promise.all([db.part.findMany({select:{id:true,name:true,partCode:true}}),db.asset.findMany({select:{id:true,name:true,assetCode:true}})]);return <><PageHeader title="ประวัติการใช้อะไหล่" description="ยอดเบิกสะสม คืน และใช้สุทธิ เชื่อมกับเครื่องจักรและใบงาน"/><Filters query={query} fields={[{name:"dateFrom",label:"ตั้งแต่",type:"date"},{name:"dateTo",label:"ถึง",type:"date"},{name:"partId",label:"อะไหล่",type:"select",options:parts.map(x=>({value:x.id,label:`${x.partCode} · ${x.name}`}))},{name:"assetId",label:"เครื่องจักร",type:"select",options:assets.map(x=>({value:x.id,label:`${x.assetCode} · ${x.name}`}))}]}/><RecordList {...data} base="/inventory/usage" query={query} columns={["ใบงาน","เครื่องจักร","อะไหล่ / คลัง","เบิก","คืน","ใช้สุทธิ"]} rows={data.rows.map(x=>({id:x.id,href:`/work-orders/${x.workOrderId}`,cells:[x.workOrder.workOrderCode,`${x.workOrder.asset.assetCode} · ${x.workOrder.asset.name}`,`${x.part.partCode} · ${x.part.name} · ${x.warehouse.name}`,x.issuedQty.toString(),x.returnedQty.toString(),`${x.issuedQty.sub(x.returnedQty)} ${x.part.uom.name}`],badge:x.workOrder.status}))}/><p className="mt-5"><Link href="/inventory/transactions" className="text-blue-700 underline">ดู ledger ตามวันที่โพสต์</Link></p></>;}

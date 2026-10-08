@@ -1,0 +1,15 @@
+import Link from "next/link";
+import { pageActor } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { can } from "@/lib/permissions";
+import { listWork } from "@/modules/work-orders/service";
+import { WorkOrderStatus,WorkOrderType,Priority } from "@/generated/prisma/client";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { Filters } from "@/components/forms/filters";
+import { RecordList } from "@/components/tables/record-list";
+import { formatDate } from "@/lib/dates";
+import type { Query } from "@/lib/lists";
+export default async function WorkList({searchParams}:{searchParams:Promise<Query>}){const actor=await pageActor(),query=await searchParams,data=await listWork(actor,query);const [sites,areas,assets]=await Promise.all([db.site.findMany({where:{isActive:true}}),db.area.findMany({where:{isActive:true}}),db.asset.findMany({select:{id:true,name:true,assetCode:true}})]);const technicians=await db.user.findMany({where:{role:"TECHNICIAN",isActive:true},select:{id:true,name:true}});return <><PageHeader title={actor.role === "TECHNICIAN" ? "งานของฉัน" : "ใบงานซ่อม"} description="มอบหมาย ติดตาม และบันทึกผลการปฏิบัติงาน">{can(actor.role,"work_order.create") && <Button asChild><Link href="/work-orders/new">+ สร้างใบงาน</Link></Button>}</PageHeader>{actor.role === "TECHNICIAN" && <nav aria-label="กลุ่มงานของฉัน" className="mb-5 flex flex-wrap gap-2">{[["urgent","เร่งด่วน"],["today","วันนี้"],["progress","กำลังทำ"],["waiting","รออะไหล่"],["pm","PM ที่กำลังมา"],["","ทั้งหมด"]].map(([view,label])=><Link key={view} href={`/work-orders?view=${view}`} className="min-h-11 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-800">{label}</Link>)}</nav>}<Filters query={query} fields={[{name:"search",label:"ค้นหา"},{name:"dateFrom",label:"ตั้งแต่",type:"date"},{name:"dateTo",label:"ถึง",type:"date"},{name:"siteId",label:"โรงงาน",type:"select",options:sites.map(x=>({value:x.id,label:x.name}))},{name:"areaId",label:"พื้นที่",type:"select",options:areas.map(x=>({value:x.id,label:x.name}))},{name:"assetId",label:"เครื่องจักร",type:"select",options:assets.map(x=>({value:x.id,label:`${x.assetCode} · ${x.name}`}))},{name:"status",label:"สถานะ",type:"select",options:Object.values(WorkOrderStatus).map(value=>({value,label:value}))},{name:"type",label:"ประเภท",type:"select",options:Object.values(WorkOrderType).map(value=>({value,label:value}))},{name:"priority",label:"ความเร่งด่วน",type:"select",options:Object.values(Priority).map(value=>({value,label:value}))},{name:"assignedTo",label:"ช่าง",type:"select",options:technicians.map(x=>({value:x.id,label:x.name}))},{name:"overdue",label:"งานเกินกำหนด",type:"select",options:[{value:"true",label:"เฉพาะเกินกำหนด"}]}]} /><RecordList {...data} query={query} base="/work-orders" columns={["รหัส","งาน","เครื่องจักร","ช่าง","กำหนดเสร็จ","ความเร่งด่วน"]} rows={data.rows.map(x=>({id:x.id,href:`/work-orders/${x.id}`,cells:[x.workOrderCode,x.title,x.asset.name,x.assignedTo?.name ?? "ยังไม่มอบหมาย",formatDate(x.dueAt),x.priority],badge:x.status}))} /></>;}
+
+

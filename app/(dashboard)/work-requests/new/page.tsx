@@ -1,0 +1,7 @@
+import { pageActor } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { requirePermission } from "@/lib/permissions";
+import { Priority } from "@/generated/prisma/client";
+import { RecordForm } from "@/components/forms/record-form";
+import { PageHeader } from "@/components/ui/page-header";
+export default async function NewRequest({searchParams}:{searchParams:Promise<{assetId?:string}>}){requirePermission(await pageActor(),"work_request.create");const assets=await db.asset.findMany({where:{isActive:true,status:{notIn:["INACTIVE","OUT_OF_SERVICE"]}},select:{id:true,name:true,assetCode:true},orderBy:{assetCode:"asc"}});return <><PageHeader title="แจ้งซ่อม" description="ระบุอาการที่พบและสถานะการหยุดเครื่อง" /><RecordForm endpoint="/api/work-requests" redirectTo="/work-requests/:id" initial={{assetId:(await searchParams).assetId ?? "",priorityRequested:"MEDIUM",machineStopped:false}} fields={[{name:"assetId",label:"เครื่องจักร",type:"select",required:true,options:assets.map(x=>({value:x.id,label:`${x.assetCode} · ${x.name}`}))},{name:"title",label:"หัวข้อปัญหา",required:true},{name:"problemDescription",label:"อาการ / รายละเอียด",type:"textarea",required:true},{name:"priorityRequested",label:"ความเร่งด่วน",type:"select",required:true,options:Object.values(Priority).map(value=>({value,label:value}))},{name:"failureObservedAt",label:"เวลาที่พบปัญหา",type:"datetime-local"},{name:"machineStopped",label:"เครื่องจักรหยุดทำงาน",type:"checkbox"}]} /></>;}

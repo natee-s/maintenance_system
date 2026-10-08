@@ -1,0 +1,8 @@
+import "dotenv/config";
+import { afterAll,it,expect } from "vitest";
+import { db } from "@/lib/db";
+import { saveTemplate,savePlan } from "@/modules/pm/master-service";
+import type { Actor } from "@/lib/permissions";
+import { bangkokDay } from "@/lib/dates";
+afterAll(()=>db.$disconnect());
+it("creates typed templates/plans, preserves archived items and rejects read-only mutations",async()=>{const sup:Actor=await db.user.findUniqueOrThrow({where:{username:"supervisor"},select:{id:true,name:true,role:true,siteId:true}}),asset=await db.asset.findUniqueOrThrow({where:{assetCode:"MP-001"}});const input={name:`PM Master ${Date.now()}`,items:[{title:"Oil",itemType:"CHECK",required:true}],isActive:true};await expect(saveTemplate({...sup,role:"MANAGER_VIEWER"},input)).rejects.toThrow("สิทธิ์");const template=await saveTemplate(sup,input);const original=await db.pmTemplateItem.findFirstOrThrow({where:{templateId:template.id}});await saveTemplate(sup,{...input,id:template.id,items:[{title:"Changed",itemType:"NUMBER",required:true,minValue:0,maxValue:10}]});expect((await db.pmTemplateItem.findUniqueOrThrow({where:{id:original.id}})).isActive).toBe(false);const today=bangkokDay();const plan=await savePlan(sup,{assetId:asset.id,templateId:template.id,name:"Plan",frequencyType:"MONTHLY",intervalValue:1,startDate:today,nextDueDate:today,leadDays:7,isActive:true});expect(plan.pmPlanCode).toMatch(/^PM-/);await db.pmTemplate.update({where:{id:template.id},data:{isActive:false}});await expect(savePlan(sup,{assetId:asset.id,templateId:template.id,name:"Bad",frequencyType:"MONTHLY",intervalValue:1,startDate:today,nextDueDate:today,leadDays:0})).rejects.toThrow("ไม่พร้อม");});

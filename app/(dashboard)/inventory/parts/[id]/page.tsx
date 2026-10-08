@@ -1,0 +1,12 @@
+import Link from "next/link";
+import { db } from "@/lib/db";
+import { pageActor } from "@/lib/auth";
+import { can,requirePermission } from "@/lib/permissions";
+import { inventoryOptions } from "@/modules/inventory/master-service";
+import { partFields } from "@/modules/inventory/fields";
+import { PageHeader } from "@/components/ui/page-header";
+import { RecordForm } from "@/components/forms/record-form";
+import { Attachments } from "@/components/maintenance/attachments";
+export default async function PartDetail({params}:{params:Promise<{id:string}>}){const actor=await pageActor();requirePermission(actor,"inventory.read");const row=await db.part.findUniqueOrThrow({where:{id:(await params).id},include:{uom:true,category:true,balances:{include:{warehouse:true}}}});return <><PageHeader title={row.name} description={`${row.partCode} · ${row.category.name} · หน่วย ${row.uom.name}`}/><section className="panel"><p>{row.description}</p><p className="mt-3 text-sm">ผู้ผลิต {row.manufacturer ?? "—"} · รหัสผู้ผลิต {row.manufacturerPartNo ?? "—"} · ขั้นต่ำ {row.minStock.toString()} · จุดแจ้ง {row.reorderPoint.toString()}</p><p className="mt-3 text-sm">ราคาอ้างอิง {row.unitCostReference?.toString() ?? "—"} (ไม่ใช่มูลค่าทางบัญชี)</p><div className="mt-5 flex gap-4"><Link className="text-blue-700 underline" href={`/inventory/transactions?partId=${row.id}`}>รายการเคลื่อนไหว</Link><Link className="text-blue-700 underline" href={`/inventory/usage?partId=${row.id}`}>ประวัติการใช้อะไหล่</Link></div></section><div className="my-6 grid gap-4 md:grid-cols-2">{row.balances.map(balance=><section className="panel" key={balance.id}><h2 className="font-bold">{balance.warehouse.name}</h2><p className="mt-3 text-sm">คงเหลือ {balance.onHandQty.toString()} · จอง {balance.reservedQty.toString()} · พร้อมใช้ {balance.onHandQty.sub(balance.reservedQty).toString()}</p></section>)}</div>{can(actor.role,"inventory.manage_master") && <RecordForm title="แก้ไขทะเบียนอะไหล่" endpoint="/api/parts" fields={partFields(await inventoryOptions())} initial={{id:row.id,name:row.name,categoryId:row.categoryId,uomId:row.uomId,minStock:row.minStock.toString(),reorderPoint:row.reorderPoint.toString(),unitCostReference:row.unitCostReference?.toString() ?? "",description:row.description ?? "",manufacturer:row.manufacturer ?? "",manufacturerPartNo:row.manufacturerPartNo ?? "",isActive:row.isActive,isCritical:row.isCritical}}/>}<Attachments actor={actor} entity="part" id={row.id} editable={can(actor.role,"inventory.manage_master")}/></>;}
+
+

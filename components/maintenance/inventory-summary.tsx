@@ -1,0 +1,6 @@
+import Link from "next/link";
+import type { Actor } from "@/lib/permissions";
+import type { Query } from "@/lib/lists";
+import { inventoryReport } from "@/modules/inventory/report-service";
+import { OperationalCharts } from "@/components/charts/operational-charts";
+export async function InventorySummary({actor,query}:{actor:Actor;query:Query}){const data=await inventoryReport(actor,query);return <section className="mt-8"><h2 className="mb-4 text-xl font-bold">ภาพรวมคลังอะไหล่</h2><div className="grid gap-4 sm:grid-cols-3">{[["อะไหล่ที่ใช้งาน",data.activeParts,"/inventory"],["อะไหล่ Stock ต่ำ",data.low,"/inventory/low-stock"],["อะไหล่สำคัญ Stock ต่ำ",data.critical,"/inventory/low-stock?critical=true"]].map(([label,count,href])=><Link className="panel" key={label} href={String(href)}><p className="text-sm text-slate-500">{label}</p><p className="mt-4 text-3xl font-bold text-blue-950">{count}</p></Link>)}</div><div className="panel mt-4"><h3 className="font-bold">ปริมาณตามหน่วย</h3>{data.quantities.map(x=><p key={x.name} className="mt-3 text-sm">{x.name} · คงเหลือ {x.onHand} · จอง {x.reserved} · พร้อมใช้ {x.available}</p>)}{!data.quantities.length && <p className="mt-3 text-sm text-slate-500">ยังไม่มี Stock</p>}</div><OperationalCharts charts={data.charts}/></section>;}

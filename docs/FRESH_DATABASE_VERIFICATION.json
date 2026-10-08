@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-10-07T13:33:25.570Z",
+  "database": "cmms_verify_1791379986871",
+  "migrations": 13,
+  "users": 8,
+  "ledger": 14,
+  "balanceMismatches": 0,
+  "migrationSeedIntegration": "passed"
+}

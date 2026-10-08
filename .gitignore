@@ -1,0 +1,40 @@
+# Dependencies and Next.js output
+node_modules/
+.next/
+out/
+.turbo/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Local CMMS runtime data
+storage/
+.local-postgres/
+
+# Test and coverage output
+playwright-report/
+test-results/
+coverage/
+
+# Generated files and caches
+*.tsbuildinfo
+generated/
+next-env.d.ts
+*.cache
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini

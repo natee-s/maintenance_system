@@ -1,0 +1,7 @@
+import "dotenv/config";
+import { chromium,devices } from "@playwright/test";
+const browser=await chromium.launch();
+async function login(page:import("@playwright/test").Page,user:string){await page.goto("http://localhost:3000/login");await page.getByLabel("ชื่อผู้ใช้ / อีเมล").fill(user);await page.getByLabel("รหัสผ่าน",{exact:true}).fill(process.env.SEED_PASSWORD ?? "PilotDemo!2026");await page.getByRole("button",{name:"เข้าสู่ระบบ",exact:true}).click();await page.waitForURL("http://localhost:3000/");}
+const desktop=await browser.newPage({viewport:{width:1440,height:1000}});await login(desktop,"admin");await desktop.getByRole("heading",{name:"ภาพรวมงานซ่อมบำรุง"}).waitFor();await desktop.screenshot({path:"docs/ui-dashboard-desktop.png"});
+const result=await (await desktop.request.get("http://localhost:3000/api/assets?search=MP-001")).json();
+const mobile=await browser.newPage({...devices["Pixel 7"]});await login(mobile,"admin");await mobile.goto(`http://localhost:3000/qr/${result.rows[0].qrToken}`);await mobile.getByRole("heading",{level:1}).waitFor();await mobile.screenshot({path:"docs/ui-qr-mobile.png"});await mobile.goto("http://localhost:3000/inventory");await mobile.getByRole("heading",{name:"คลังอะไหล่",exact:true}).waitFor();await mobile.screenshot({path:"docs/ui-inventory-mobile.png"});await browser.close();console.log("Captured desktop dashboard, mobile QR and inventory.");

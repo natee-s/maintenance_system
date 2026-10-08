@@ -1,0 +1,694 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MAINTENANCE_SUPERVISOR
+  TECHNICIAN
+  REQUESTER
+  STOREKEEPER
+  MANAGER_VIEWER
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  sites     Site[]
+}
+
+model Site {
+  warehouses     Warehouse[]
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  code           String
+  name           String
+  timezone       String       @default("Asia/Bangkok")
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  users          User[]
+  areas          Area[]
+  locations      Location[]
+  assets         Asset[]
+
+  @@unique([organizationId, code])
+}
+
+model Area {
+  id        String     @id @default(cuid())
+  siteId    String
+  site      Site       @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  code      String
+  name      String
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+  locations Location[]
+  assets    Asset[]
+
+  @@unique([siteId, code])
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  areaId      String?
+  area        Area?    @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  code        String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  assets      Asset[]
+
+  @@unique([siteId, code])
+}
+
+model User {
+  reservations       PartReservation[]
+  partsCreated       Part[]              @relation("PartCreator")
+  partsUpdated       Part[]              @relation("PartUpdater")
+  stockPerformed     StockTransaction[]
+  checklistCompleted PmExecutionItem[]
+  id                 String              @id @default(cuid())
+  employeeCode       String?             @unique
+  name               String
+  email              String              @unique
+  username           String              @unique
+  passwordHash       String
+  role               Role
+  siteId             String?
+  site               Site?               @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  isActive           Boolean             @default(true)
+  lastLoginAt        DateTime?           @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  auditLogs          AuditLog[]
+  assetsCreated      Asset[]             @relation("AssetCreator")
+  assetsUpdated      Asset[]             @relation("AssetUpdater")
+  reportedRequests   WorkRequest[]       @relation("RequestReporter")
+  reviewedRequests   WorkRequest[]       @relation("RequestReviewer")
+  workCreated        WorkOrder[]         @relation("WorkCreator")
+  workAssigned       WorkOrder[]         @relation("WorkAssignee")
+  workClosed         WorkOrder[]         @relation("WorkCloser")
+  activities         WorkOrderActivity[]
+  comments           Comment[]
+  attachments        Attachment[]
+  notifications      Notification[]
+  pmTemplates        PmTemplate[]
+  pmPlansCreated     PmPlan[]            @relation("PmPlanCreator")
+  pmPlansAssigned    PmPlan[]            @relation("PmPlanAssignee")
+  downtimeCreated    DowntimeEvent[]
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model BusinessCounter {
+  key   String @id
+  value Int    @default(0)
+}
+
+model LoginAttempt {
+  key         String   @id
+  failures    Int      @default(0)
+  windowStart DateTime @default(now()) @db.Timestamptz(3)
+}
+
+enum MasterKind {
+  ASSET_CATEGORY
+  ASSET_CRITICALITY
+  WORK_PRIORITY
+  FAILURE_CATEGORY
+  WORK_TYPE
+  PART_CATEGORY
+  UOM
+  TEAM
+}
+
+model MasterData {
+  partCategories Part[]       @relation("PartCategory")
+  partUnits      Part[]       @relation("PartUom")
+  id             String       @id @default(cuid())
+  kind           MasterKind
+  code           String
+  name           String
+  description    String?
+  allowsDecimal  Boolean      @default(false)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  assets         Asset[]
+  failures       WorkOrder[]
+  pmTemplates    PmTemplate[] @relation("PmTemplateCategory")
+  pmTeams        PmPlan[]     @relation("PmPlanTeam")
+
+  @@unique([kind, code])
+  @@index([kind, isActive])
+}
+
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+  UNDER_MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum Criticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Asset {
+  id           String          @id @default(cuid())
+  assetCode    String          @unique
+  name         String
+  categoryId   String
+  category     MasterData      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  siteId       String
+  site         Site            @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  areaId       String?
+  area         Area?           @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  locationId   String?
+  location     Location?       @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  criticality  Criticality
+  status       AssetStatus     @default(ACTIVE)
+  manufacturer String?
+  model        String?
+  serialNumber String?
+  installDate  DateTime?       @db.Date
+  description  String?
+  qrToken      String          @unique @default(uuid())
+  isActive     Boolean         @default(true)
+  createdBy    String
+  creator      User            @relation("AssetCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  updatedBy    String
+  updater      User            @relation("AssetUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
+  archivedAt   DateTime?       @db.Timestamptz(3)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(3)
+  requests     WorkRequest[]
+  pmPlans      PmPlan[]
+  downtimes    DowntimeEvent[]
+  workOrders   WorkOrder[]
+  attachments  Attachment[]
+
+  @@index([name])
+  @@index([siteId, status])
+  @@index([areaId])
+  @@index([locationId])
+  @@index([categoryId])
+}
+
+enum FrequencyType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+  CUSTOM_DAYS
+}
+
+enum ChecklistType {
+  CHECK
+  TEXT
+  NUMBER
+  PASS_FAIL
+}
+
+model PmTemplate {
+  id                       String           @id @default(cuid())
+  templateCode             String           @unique
+  name                     String
+  description              String?
+  categoryId               String?
+  category                 MasterData?      @relation("PmTemplateCategory", fields: [categoryId], references: [id], onDelete: Restrict)
+  estimatedDurationMinutes Int?
+  safetyNote               String?
+  isActive                 Boolean          @default(true)
+  createdBy                String
+  creator                  User             @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  items                    PmTemplateItem[]
+  plans                    PmPlan[]
+  createdAt                DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime         @updatedAt @db.Timestamptz(3)
+}
+
+model PmTemplateItem {
+  executions          PmExecutionItem[]
+  id                  String            @id @default(cuid())
+  templateId          String
+  template            PmTemplate        @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  sequence            Int
+  title               String
+  instruction         String?
+  itemType            ChecklistType
+  required            Boolean           @default(true)
+  unit                String?
+  minValue            Float?
+  maxValue            Float?
+  requiresNoteOnFail  Boolean           @default(false)
+  requiresPhotoOnFail Boolean           @default(false)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@unique([templateId, sequence])
+}
+
+model PmPlan {
+  workOrders               WorkOrder[]
+  id                       String        @id @default(cuid())
+  pmPlanCode               String        @unique
+  assetId                  String
+  asset                    Asset         @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  templateId               String
+  template                 PmTemplate    @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  name                     String
+  frequencyType            FrequencyType
+  intervalValue            Int           @default(1)
+  startDate                DateTime      @db.Date
+  nextDueDate              DateTime      @db.Date
+  leadDays                 Int           @default(0)
+  assignedTeamId           String?
+  assignedTeam             MasterData?   @relation("PmPlanTeam", fields: [assignedTeamId], references: [id], onDelete: Restrict)
+  assignedToId             String?
+  assignedTo               User?         @relation("PmPlanAssignee", fields: [assignedToId], references: [id], onDelete: Restrict)
+  estimatedDurationMinutes Int?
+  isActive                 Boolean       @default(true)
+  lastGeneratedAt          DateTime?     @db.Timestamptz(3)
+  createdBy                String
+  creator                  User          @relation("PmPlanCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt                DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([isActive, nextDueDate])
+  @@index([assetId])
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum WorkRequestStatus {
+  OPEN
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CONVERTED
+  CANCELLED
+}
+
+enum WorkOrderType {
+  CORRECTIVE
+  PREVENTIVE
+}
+
+enum WorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  PAUSED
+  WAITING_PART
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+model WorkRequest {
+  id                   String            @id @default(cuid())
+  requestCode          String            @unique
+  assetId              String
+  asset                Asset             @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  title                String
+  problemDescription   String
+  priorityRequested    Priority
+  priorityApproved     Priority?
+  reportedAt           DateTime          @default(now()) @db.Timestamptz(3)
+  failureObservedAt    DateTime?         @db.Timestamptz(3)
+  machineStopped       Boolean           @default(false)
+  status               WorkRequestStatus @default(OPEN)
+  reporterId           String
+  reporter             User              @relation("RequestReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reviewedBy           String?
+  reviewer             User?             @relation("RequestReviewer", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  reviewedAt           DateTime?         @db.Timestamptz(3)
+  rejectionReason      String?
+  internalNote         String?
+  convertedWorkOrderId String?           @unique
+  convertedWorkOrder   WorkOrder?        @relation("ConvertedWorkOrder", fields: [convertedWorkOrderId], references: [id], onDelete: Restrict)
+  sourceFor            WorkOrder?        @relation("WorkOrderSource")
+  attachments          Attachment[]
+  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([assetId, reportedAt])
+  @@index([status, reportedAt])
+  @@index([reporterId, reportedAt])
+}
+
+model WorkOrder {
+  reservations        PartReservation[]
+  partUsage           WorkOrderPartUsage[]
+  stockTransactions   StockTransaction[]
+  pmPlanId            String?
+  pmPlan              PmPlan?              @relation(fields: [pmPlanId], references: [id], onDelete: Restrict)
+  scheduledDueDate    DateTime?            @db.Date
+  safetyNoteSnapshot  String?
+  checklist           PmExecutionItem[]
+  id                  String               @id @default(cuid())
+  workOrderCode       String               @unique
+  type                WorkOrderType        @default(CORRECTIVE)
+  assetId             String
+  asset               Asset                @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  sourceWorkRequestId String?              @unique
+  sourceWorkRequest   WorkRequest?         @relation("WorkOrderSource", fields: [sourceWorkRequestId], references: [id], onDelete: Restrict)
+  convertedFrom       WorkRequest?         @relation("ConvertedWorkOrder")
+  title               String
+  description         String
+  priority            Priority             @default(MEDIUM)
+  status              WorkOrderStatus      @default(OPEN)
+  assignedToId        String?
+  assignedTo          User?                @relation("WorkAssignee", fields: [assignedToId], references: [id], onDelete: Restrict)
+  plannedStartAt      DateTime?            @db.Timestamptz(3)
+  dueAt               DateTime?            @db.Timestamptz(3)
+  actualStartAt       DateTime?            @db.Timestamptz(3)
+  actualEndAt         DateTime?            @db.Timestamptz(3)
+  failureObservedAt   DateTime?            @db.Timestamptz(3)
+  failureCategoryId   String?
+  failureCategory     MasterData?          @relation(fields: [failureCategoryId], references: [id], onDelete: Restrict)
+  findings            String?
+  causeText           String?
+  actionTaken         String?
+  completionNote      String?
+  createdBy           String
+  creator             User                 @relation("WorkCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  closedBy            String?
+  closer              User?                @relation("WorkCloser", fields: [closedBy], references: [id], onDelete: Restrict)
+  closedAt            DateTime?            @db.Timestamptz(3)
+  activities          WorkOrderActivity[]
+  comments            Comment[]
+  downtime            DowntimeEvent?
+  attachments         Attachment[]
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@unique([pmPlanId, scheduledDueDate])
+  @@index([assetId, createdAt])
+  @@index([status, dueAt])
+  @@index([assignedToId, status])
+  @@index([type, createdAt])
+}
+
+model DowntimeEvent {
+  id              String    @id @default(cuid())
+  assetId         String
+  asset           Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  workOrderId     String    @unique
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  startedAt       DateTime  @db.Timestamptz(3)
+  endedAt         DateTime? @db.Timestamptz(3)
+  durationMinutes Decimal?  @db.Decimal(14, 2)
+  reason          String?
+  createdBy       String
+  creator         User      @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([assetId, startedAt])
+  @@index([endedAt])
+}
+
+model Comment {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  body        String
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([workOrderId, createdAt])
+}
+
+model Attachment {
+  partId          String?
+  part            Part?            @relation(fields: [partId], references: [id], onDelete: Restrict)
+  executionItemId String?
+  executionItem   PmExecutionItem? @relation(fields: [executionItemId], references: [id], onDelete: Restrict)
+  id              String           @id @default(cuid())
+  assetId         String?
+  asset           Asset?           @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  workRequestId   String?
+  workRequest     WorkRequest?     @relation(fields: [workRequestId], references: [id], onDelete: Restrict)
+  workOrderId     String?
+  workOrder       WorkOrder?       @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  fileName        String
+  mimeType        String
+  fileSize        Int
+  storageKey      String           @unique
+  uploadedBy      String
+  uploader        User             @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([assetId])
+  @@index([partId])
+  @@index([workRequestId])
+  @@index([workOrderId])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type      String
+  title     String
+  message   String
+  link      String
+  readAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, readAt, createdAt])
+}
+
+enum PassFail {
+  PASS
+  FAIL
+}
+
+model PmExecutionItem {
+  id                  String          @id @default(cuid())
+  workOrderId         String
+  workOrder           WorkOrder       @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  sourceItemId        String?
+  sourceItem          PmTemplateItem? @relation(fields: [sourceItemId], references: [id], onDelete: Restrict)
+  sequence            Int
+  titleSnapshot       String
+  instructionSnapshot String?
+  itemType            ChecklistType
+  required            Boolean
+  unit                String?
+  minValue            Float?
+  maxValue            Float?
+  requiresNoteOnFail  Boolean
+  requiresPhotoOnFail Boolean
+  responseBoolean     Boolean?
+  responseText        String?
+  responseNumber      Float?
+  passFailResult      PassFail?
+  note                String?
+  completedBy         String?
+  completedUser       User?           @relation(fields: [completedBy], references: [id], onDelete: Restrict)
+  completedAt         DateTime?       @db.Timestamptz(3)
+  attachments         Attachment[]
+  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@unique([workOrderId, sequence])
+}
+
+enum StockTransactionType {
+  INITIAL
+  RECEIPT_MANUAL
+  ISSUE
+  RETURN
+  ADJUST_IN
+  ADJUST_OUT
+}
+
+model Part {
+  attachments        Attachment[]
+  reservations       PartReservation[]
+  usage              WorkOrderPartUsage[]
+  id                 String               @id @default(cuid())
+  partCode           String               @unique
+  name               String
+  categoryId         String
+  category           MasterData           @relation("PartCategory", fields: [categoryId], references: [id], onDelete: Restrict)
+  uomId              String
+  uom                MasterData           @relation("PartUom", fields: [uomId], references: [id], onDelete: Restrict)
+  description        String?
+  manufacturer       String?
+  manufacturerPartNo String?
+  minStock           Decimal              @db.Decimal(18, 4)
+  reorderPoint       Decimal              @db.Decimal(18, 4)
+  unitCostReference  Decimal?             @db.Decimal(18, 2)
+  isCritical         Boolean              @default(false)
+  isActive           Boolean              @default(true)
+  createdBy          String
+  creator            User                 @relation("PartCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  updatedBy          String
+  updater            User                 @relation("PartUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
+  balances           StockBalance[]
+  transactions       StockTransaction[]
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@index([name])
+  @@index([categoryId, isActive])
+}
+
+model Warehouse {
+  reservations PartReservation[]
+  usage        WorkOrderPartUsage[]
+  id           String               @id @default(cuid())
+  siteId       String
+  site         Site                 @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  code         String
+  name         String
+  description  String?
+  isActive     Boolean              @default(true)
+  balances     StockBalance[]
+  transactions StockTransaction[]
+  createdAt    DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@unique([siteId, code])
+}
+
+model StockBalance {
+  id          String    @id @default(cuid())
+  partId      String
+  part        Part      @relation(fields: [partId], references: [id], onDelete: Restrict)
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  onHandQty   Decimal   @default(0) @db.Decimal(18, 4)
+  reservedQty Decimal   @default(0) @db.Decimal(18, 4)
+  binText     String?
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([partId, warehouseId])
+}
+
+model StockTransaction {
+  id              String               @id @default(cuid())
+  transactionCode String               @unique
+  partId          String
+  part            Part                 @relation(fields: [partId], references: [id], onDelete: Restrict)
+  warehouseId     String
+  warehouse       Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  type            StockTransactionType
+  quantity        Decimal              @db.Decimal(18, 4)
+  workOrderId     String?
+  workOrder       WorkOrder?           @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  referenceText   String?
+  reason          String?
+  performedBy     String
+  performer       User                 @relation(fields: [performedBy], references: [id], onDelete: Restrict)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([partId, warehouseId, createdAt])
+  @@index([workOrderId, partId])
+  @@index([type, createdAt])
+}
+
+enum ReservationStatus {
+  ACTIVE
+  PARTIALLY_ISSUED
+  FULFILLED
+  CANCELLED
+}
+
+model PartReservation {
+  id             String            @id @default(cuid())
+  workOrderId    String
+  workOrder      WorkOrder         @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  partId         String
+  part           Part              @relation(fields: [partId], references: [id], onDelete: Restrict)
+  warehouseId    String
+  warehouse      Warehouse         @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  quantity       Decimal           @db.Decimal(18, 4)
+  issuedQuantity Decimal           @default(0) @db.Decimal(18, 4)
+  status         ReservationStatus @default(ACTIVE)
+  createdBy      String
+  creator        User              @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([workOrderId, status])
+  @@index([partId, warehouseId, status])
+}
+
+model WorkOrderPartUsage {
+  id               String    @id @default(cuid())
+  workOrderId      String
+  workOrder        WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  partId           String
+  part             Part      @relation(fields: [partId], references: [id], onDelete: Restrict)
+  warehouseId      String
+  warehouse        Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  issuedQty        Decimal   @default(0) @db.Decimal(18, 4)
+  returnedQty      Decimal   @default(0) @db.Decimal(18, 4)
+  unitCostSnapshot Decimal?  @db.Decimal(18, 2)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([workOrderId, partId, warehouseId])
+  @@index([partId, createdAt])
+}
+
+model WorkOrderActivity {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  eventType   String
+  actorId     String
+  actor       User      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  message     String
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([workOrderId, createdAt])
+}

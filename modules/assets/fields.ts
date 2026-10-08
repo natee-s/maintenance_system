@@ -1,0 +1,7 @@
+import { AssetStatus,Criticality } from "@/generated/prisma/client";
+import type { Field } from "@/components/forms/record-form";
+import type { locationOptions } from "@/modules/locations/service";
+export function assetFields(options: Awaited<ReturnType<typeof locationOptions>>): Field[] {
+  const [,sites,areas,locations,masters] = options;
+  return [{name:"name",label:"ชื่อเครื่องจักร",required:true},{name:"categoryId",label:"ประเภท",type:"select",required:true,options:masters.filter(x=>x.isActive && x.kind === "ASSET_CATEGORY").map(x=>({value:x.id,label:x.name}))},{name:"siteId",label:"โรงงาน",type:"select",required:true,options:sites.filter(x=>x.isActive).map(x=>({value:x.id,label:x.name}))},{name:"areaId",label:"พื้นที่",type:"select",options:areas.filter(x=>x.isActive).map(x=>({value:x.id,label:`${x.site.name} / ${x.name}`}))},{name:"locationId",label:"สถานที่",type:"select",options:locations.filter(x=>x.isActive).map(x=>({value:x.id,label:`${x.site.name} / ${x.name}`}))},{name:"criticality",label:"ความสำคัญ",type:"select",required:true,options:Object.values(Criticality).map(value=>({value,label:value}))},{name:"status",label:"สถานะ",type:"select",required:true,options:Object.values(AssetStatus).map(value=>({value,label:value}))},{name:"manufacturer",label:"ผู้ผลิต"},{name:"model",label:"รุ่น"},{name:"serialNumber",label:"Serial number"},{name:"installDate",label:"วันที่ติดตั้ง",type:"date"},{name:"description",label:"รายละเอียด",type:"textarea"},{name:"isActive",label:"เปิดใช้งานทะเบียน",type:"checkbox"}];
+}

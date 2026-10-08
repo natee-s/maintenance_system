@@ -1,0 +1,1 @@
+export function safeRedirect(value:unknown){if(typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\"))return "/";try{const parsed=new URL(value,"http://cmms.local");return parsed.origin === "http://cmms.local" && parsed.pathname !== "/login" ? parsed.pathname+parsed.search : "/";}catch{return "/";}}

@@ -1,0 +1,2 @@
+import { expect,type Page } from "@playwright/test";
+export async function login(page:Page,username:string){await page.context().clearCookies();await page.goto("/login");await page.getByLabel("ชื่อผู้ใช้ / อีเมล").fill(username);await page.getByLabel("รหัสผ่าน",{exact:true}).fill(process.env.SEED_PASSWORD ?? "PilotDemo!2026");await page.getByRole("button",{name:"เข้าสู่ระบบ",exact:true}).click();await expect(page).not.toHaveURL(/\/login/);}

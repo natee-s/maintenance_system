@@ -1,0 +1,10 @@
+import "dotenv/config";
+import { afterAll,it,expect } from "vitest";
+import { db } from "@/lib/db";
+import { createWork,operateWork } from "@/modules/work-orders/service";
+import { saveDowntime } from "@/modules/downtime/service";
+import { dashboard } from "@/modules/dashboard/service";
+import type { Actor } from "@/lib/permissions";
+afterAll(()=>db.$disconnect());
+it("validates downtime and requires open-downtime acknowledgement at close",async()=>{const sup:Actor=await db.user.findUniqueOrThrow({where:{username:"supervisor"},select:{id:true,name:true,role:true,siteId:true}}),tech:Actor=await db.user.findUniqueOrThrow({where:{username:"technician1"},select:{id:true,name:true,role:true,siteId:true}}),asset=await db.asset.findUniqueOrThrow({where:{assetCode:"MP-003"}}),failure=await db.masterData.findFirstOrThrow({where:{kind:"FAILURE_CATEGORY"}});const wo=await createWork(sup,{assetId:asset.id,title:"Downtime test",description:"test",priority:"MEDIUM"});await operateWork(sup,wo.id,"assign",{assignedToId:tech.id});await operateWork(tech,wo.id,"start",{});await expect(saveDowntime(tech,wo.id,{startedAt:"2026-01-02T00:00:00Z",endedAt:"2026-01-01T00:00:00Z"})).rejects.toThrow();await saveDowntime(tech,wo.id,{startedAt:new Date(Date.now()-60000).toISOString()});await operateWork(tech,wo.id,"execution",{findings:"test",actionTaken:"test",failureCategoryId:failure.id});await operateWork(tech,wo.id,"complete",{});await expect(operateWork(sup,wo.id,"close",{})).rejects.toThrow("หยุด");await operateWork(sup,wo.id,"close",{acknowledgeOpenDowntime:true});const data=await dashboard(sup,{});expect(data.downtime.ongoing).toBeGreaterThan(0);await expect(saveDowntime(tech,wo.id,{endedAt:new Date().toISOString(),reason:"Recovery"})).rejects.toThrow();await expect(saveDowntime(sup,wo.id,{endedAt:new Date().toISOString()})).rejects.toThrow();const recovery=await saveDowntime(sup,wo.id,{endedAt:new Date().toISOString(),reason:"Machine restarted after inspection"});expect(recovery.durationMinutes?.toNumber()).toBeGreaterThan(0);expect(await db.auditLog.count({where:{entityId:recovery.id,action:"DOWNTIME_UPDATE"}})).toBeGreaterThan(0);});
+

@@ -1,0 +1,6 @@
+import { db } from "@/lib/db";
+import { pageActor } from "@/lib/auth";
+import { can,requirePermission } from "@/lib/permissions";
+import { PageHeader } from "@/components/ui/page-header";
+import { RecordForm,type Field } from "@/components/forms/record-form";
+export default async function Warehouses(){const actor=await pageActor();requirePermission(actor,"inventory.read");const [rows,sites]=await Promise.all([db.warehouse.findMany({include:{site:true}}),db.site.findMany({where:{isActive:true}})]);const fields:Field[]=[{name:"code",label:"รหัสคลัง",required:true},{name:"name",label:"ชื่อคลัง",required:true},{name:"siteId",label:"โรงงาน",type:"select",required:true,options:sites.map(x=>({value:x.id,label:x.name}))},{name:"description",label:"รายละเอียด",type:"textarea"},{name:"isActive",label:"เปิดใช้งาน",type:"checkbox"}];return <><PageHeader title="คลังอะไหล่"/>{rows.map(row=><details className="panel mb-4" key={row.id}><summary>{row.code} · {row.name} · {row.site.name}</summary>{can(actor.role,"inventory.manage_master") && <RecordForm endpoint="/api/warehouses" fields={fields} initial={{...row}}/>}</details>)}{can(actor.role,"inventory.manage_master") && <RecordForm title="เพิ่มคลัง" endpoint="/api/warehouses" fields={fields} initial={{isActive:true}}/>}</>;}
